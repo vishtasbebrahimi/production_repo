@@ -1,44 +1,56 @@
-name: CI
+﻿name: CI
+
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  frontend:
+    name: Frontend Build
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: username
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: ai_content
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
+    if: ${{ hashFiles('frontend/package.json') != '' }}
+    defaults:
+      run:
+        working-directory: frontend
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 18
-      - name: Install dependencies and build backend
-        run: |
-          cd production_repo/backend
-          npm install --legacy-peer-deps
-          npm run build
-      - name: Install dependencies and build frontend
-        run: |
-          cd production_repo/frontend
-          npm install --legacy-peer-deps
-          npm run build
-      - name: Run Prisma generate
-        run: |
-          cd production_repo/backend
-          npx prisma generate
-      # TODO: Add tests when available
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Lint (if exists)
+        run: npm run lint --if-present
+      - name: Build
+        run: npm run build --if-present
+
+  backend:
+    name: Backend Build
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('backend/package.json') != '' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Generate Prisma (if exists)
+        if: ${{ hashFiles('backend/prisma/schema.prisma') != '' }}
+        run: npx prisma generate
+      - name: Lint (if exists)
+        run: npm run lint --if-present
+      - name: Build
+        run: npm run build --if-present
