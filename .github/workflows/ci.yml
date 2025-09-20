@@ -13,12 +13,24 @@ jobs:
   frontend:
     name: Frontend Build
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('frontend/package.json') != '' }}
+    # Use a lightweight path filter action instead of hashFiles so this workflow
+    # works on environments that don't support the hashFiles expression.
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      - name: Check frontend paths
+        id: paths-frontend
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+      - name: Skip if frontend unchanged
+        if: ${{ steps.paths-frontend.outputs.frontend == 'false' }}
+        run: |
+          echo "No frontend changes detected; skipping frontend job." && exit 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -34,12 +46,23 @@ jobs:
   backend:
     name: Backend Build
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('backend/package.json') != '' }}
+    # Use path filtering to avoid using hashFiles, which may not be available.
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      - name: Check backend paths
+        id: paths-backend
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+      - name: Skip if backend unchanged
+        if: ${{ steps.paths-backend.outputs.backend == 'false' }}
+        run: |
+          echo "No backend changes detected; skipping backend job." && exit 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -48,8 +71,9 @@ jobs:
       - name: Install deps
         run: npm ci
       - name: Generate Prisma (if exists)
-        if: ${{ hashFiles('backend/prisma/schema.prisma') != '' }}
-        run: npx prisma generate
+        if: ${{ steps.paths-backend.outputs.backend == 'true' }}
+        run: |
+          if [ -f prisma/schema.prisma ]; then npx prisma generate; else echo "No prisma schema found, skipping"; fi
       - name: Lint (if exists)
         run: npm run lint --if-present
       - name: Build
