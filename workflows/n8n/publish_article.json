@@ -1,0 +1,59 @@
+{
+  "nodes": [
+    {
+      "id": "Webhook",
+      "type": "webhook",
+      "parameters": {
+        "path": "publish-article",
+        "httpMethod": "POST"
+      }
+    },
+    {
+      "id": "Publish to CMS",
+      "type": "httpRequest",
+      "parameters": {
+        "url": "{{$env.CMS_API_URL}}/posts",
+        "method": "POST",
+        "bodyParameters": {
+          "title": "={{ $json[\"title\"] }}",
+          "content": "={{ $json[\"body\"] }}",
+          "status": "publish"
+        },
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.CMS_API_TOKEN}}"
+        }
+      }
+    },
+    {
+      "id": "Update Status",
+      "type": "httpRequest",
+      "parameters": {
+        "url": "{{$env.API_URL}}/requests/{{ $json[\"requestId\"] }}/publish",
+        "method": "POST",
+        "bodyParameters": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        {
+          "node": "Publish to CMS",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    },
+    "Publish to CMS": {
+      "main": [
+        {
+          "node": "Update Status",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    }
+  }
+}

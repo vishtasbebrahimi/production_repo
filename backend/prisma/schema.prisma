@@ -1,0 +1,184 @@
+// Prisma schema for AI Content Platform
+// Defines the data model for user management, projects, content generation, SEO, analytics and integrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  fullName      String?
+  status        UserStatus @default(PENDING)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  roles         UserRole[]
+  projects      Project[]   @relation("UserProjects")
+  ownedRequests ContentRequest[] @relation("RequestOwner")
+  assignedRequests ContentRequest[] @relation("RequestAssigned")
+  auditLogs     AuditLog[]
+  apiKeys       ApiKey[]
+  integrationCredentials IntegrationCredential[]
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model Role {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  ownerId     String
+  owner       User          @relation("UserProjects", fields: [ownerId], references: [id])
+  title       String
+  description String?
+  status      ProjectStatus @default(OPEN)
+  deadline    DateTime?
+  createdAt   DateTime      @default(now())
+  contentRequests ContentRequest[]
+}
+
+enum ProjectStatus {
+  OPEN
+  COMPLETED
+  ARCHIVED
+}
+
+model ContentRequest {
+  id            String       @id @default(uuid())
+  projectId     String?
+  project       Project?     @relation(fields: [projectId], references: [id])
+  requestedById String       // user who created the request
+  requestedBy   User         @relation("RequestOwner", fields: [requestedById], references: [id])
+  assignedToId  String?      // user responsible for producing content
+  assignedTo    User?        @relation("RequestAssigned", fields: [assignedToId], references: [id])
+  title         String
+  description   String?
+  persona       String?
+  tone          String?
+  language      String       // e.g. fa, en
+  lengthType    LengthType   @default(MEDIUM)
+  status        RequestStatus @default(PENDING)
+  dueDate       DateTime?
+  createdAt     DateTime      @default(now())
+  article       Article?
+  seoData       SEOData?
+}
+
+enum LengthType {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum RequestStatus {
+  PENDING
+  GENERATING
+  SEO
+  READY_FOR_PUBLISH
+  PUBLISHED
+  ERROR
+}
+
+model Article {
+  id              String    @id @default(uuid())
+  contentRequestId String   @unique
+  contentRequest  ContentRequest @relation(fields: [contentRequestId], references: [id])
+  body            String
+  publishedUrl    String?
+  status          ArticleStatus @default(DRAFT)
+  createdAt       DateTime  @default(now())
+  analyticsEvents AnalyticsEvent[]
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  FAILED
+}
+
+model SEOData {
+  id             String    @id @default(uuid())
+  contentRequestId String   @unique
+  contentRequest  ContentRequest @relation(fields: [contentRequestId], references: [id])
+  keywords        String[] // array of keywords
+  metaTitle       String?
+  metaDescription String?
+  readabilityScore Float?
+  schemaJson      Json?
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  eventType AnalyticsEventType
+  data      Json?
+  createdAt DateTime @default(now())
+}
+
+enum AnalyticsEventType {
+  VIEW
+  CLICK
+  FEEDBACK
+}
+
+model IntegrationCredential {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      IntegrationType
+  name      String
+  config    Json
+  createdAt DateTime @default(now())
+}
+
+enum IntegrationType {
+  OPENAI
+  GEMINI
+  CALENDAR
+  CMS
+  ANALYTICS
+  OTHER
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String   @unique
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // description of the action
+  entity    String   // name of the entity (e.g. Project, ContentRequest)
+  entityId  String   // id of the entity
+  data      Json?
+  createdAt DateTime @default(now())
+}
